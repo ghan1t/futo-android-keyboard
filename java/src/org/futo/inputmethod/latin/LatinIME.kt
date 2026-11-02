@@ -496,6 +496,9 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
             if (differs) {
                 invalidateKeyboard(refreshSettings = true)
             }
+            if (oldSettings.isAutoCorrectEnabled != newSettings.isAutoCorrectEnabled) {
+                imeManager.onAutoCorrectionSettingChanged()
+            }
         }
     }
 

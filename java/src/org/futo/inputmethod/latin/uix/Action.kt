@@ -1,6 +1,7 @@
 package org.futo.inputmethod.latin.uix
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Typeface
 import android.net.Uri
 import android.view.View
@@ -12,6 +13,10 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -175,6 +180,52 @@ enum class PersistentStateInitialization {
     OnKeyboardLoad
 }
 
+@Composable
+private fun useSharedPrefBoolValue(key: String, default: Boolean): Boolean {
+    val context = LocalContext.current
+    val prefs = remember(context) { PreferenceUtils.getDefaultSharedPreferences(context) }
+    val value = remember(prefs, key, default) { mutableStateOf(prefs.getBoolean(key, default)) }
+
+    DisposableEffect(key, prefs, default) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+            if (changedKey == null || changedKey == key) {
+                value.value = prefs.getBoolean(key, default)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        value.value = prefs.getBoolean(key, default)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    return value.value
+}
+
+@Composable
+fun actionIconRes(action: Action): Int {
+    val prefKey = action.activeStatePrefKey
+    val inactiveIcon = action.iconInactive
+    if (prefKey != null && inactiveIcon != null) {
+        val active = useSharedPrefBoolValue(prefKey, action.activeStateDefault)
+        return if (active) action.icon else inactiveIcon
+    }
+    return action.icon
+}
+
+@Composable
+fun actionStateDescription(action: Action): String? {
+    val key = action.activeStatePrefKey ?: return null
+    val active = useSharedPrefBoolValue(key, action.activeStateDefault)
+    val description = if (active) action.activeStateDescription else action.inactiveStateDescription
+    return description?.let { stringResource(it) }
+}
+
+@Composable
+fun actionContentDescription(action: Action): String {
+    val name = stringResource(action.name)
+    val state = actionStateDescription(action)
+    return if (state == null) name else "$name, $state"
+}
+
 data class Action(
     @DrawableRes val icon: Int,
     @StringRes val name: Int,
@@ -190,6 +241,12 @@ data class Action(
     val shownInEditor: Boolean = true,
 
     val settingsMenu: UserSettingsMenu? = null,
+
+    @DrawableRes val iconInactive: Int? = null,
+    val activeStatePrefKey: String? = null,
+    val activeStateDefault: Boolean = false,
+    @StringRes val activeStateDescription: Int? = null,
+    @StringRes val inactiveStateDescription: Int? = null,
 )
 
 data class LangSpecAction(

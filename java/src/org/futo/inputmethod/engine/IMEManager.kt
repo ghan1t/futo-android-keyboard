@@ -112,6 +112,10 @@ class IMEManager(
         }
     }
 
+    fun onAutoCorrectionSettingChanged() {
+        (activeIme as? GeneralIME)?.onAutoCorrectionSettingChanged()
+    }
+
     private var created = false
     fun onCreate() {
         created = true

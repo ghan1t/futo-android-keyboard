@@ -2723,7 +2723,11 @@ public final class InputLogic {
 
         final SuggestedWordInfo autoCorrectionOrNull = mWordComposer.getAutoCorrectionOrNull();
         final String typedWord = mWordComposer.getTypedWord();
-        final String stringToCommit = (autoCorrectionOrNull != null)
+        // Other commit paths (for example text actions) can reach here after a toggle too.
+        // Batch input still needs to commit its recognized word when autocorrect is disabled.
+        final boolean mayAutoCorrect = mWordComposer.isBatchMode()
+                || settingsValues.mAutoCorrectionEnabledPerUserSettings;
+        final String stringToCommit = (mayAutoCorrect && autoCorrectionOrNull != null)
                 ? autoCorrectionOrNull.mWord : typedWord;
         if (stringToCommit != null) {
             if (TextUtils.isEmpty(typedWord)) {
