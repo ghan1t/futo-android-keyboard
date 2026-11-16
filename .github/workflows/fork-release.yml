@@ -1,0 +1,149 @@
+name: Fork release
+run-name: Fork release · ${{ github.ref_name }} · ${{ github.event_name }}
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialize calculation and reservation together on each branch. Feature previews
+# never hold up master. A push to a tag does not trigger this workflow.
+concurrency:
+  group: fork-release-${{ github.ref }}
+  cancel-in-progress: false
+  # Preserve queued master builds (GitHub supports this since May 2026).
+  queue: max
+
+jobs:
+  version:
+    name: Calculate next version
+    runs-on: ubuntu-latest
+    outputs:
+      version_name: ${{ steps.version.outputs.version_name }}
+      version_code: ${{ steps.version.outputs.version_code }}
+      tag: ${{ steps.version.outputs.tag }}
+      channel: ${{ steps.version.outputs.channel }}
+      gradle_task: ${{ steps.version.outputs.gradle_task }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      # Contacts upstream on each run and fetches all tags plus their missing Git
+      # objects, including commits we have not merged, into our upstream/* namespace.
+      # --no-tags disables automatic tag following; the explicit refspec still fetches tags.
+      # This does not merge changes or alter the checked-out code. version.py uses
+      # `git tag --merged HEAD --list 'upstream/*'`, so only releases already included
+      # in this commit's history can determine our version.
+      - name: Fetch upstream release tags in a separate namespace
+        run: git fetch --no-tags https://github.com/futo-org/android-keyboard.git '+refs/tags/*:refs/tags/upstream/*'
+      - name: Calculate and display version
+        id: version
+        env:
+          RELEASE_BRANCH: ${{ github.ref_name }}
+        run: python3 tools/release/version.py --branch "$RELEASE_BRANCH" --output version.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-plan
+          path: version.json
+      - name: Explain feature release action
+        if: github.ref_name != 'master' && github.event_name != 'workflow_dispatch'
+        run: echo 'To publish this feature branch, select it under Actions → Fork release → Run workflow. No tag-triggered workflow is used.' >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Release ${{ needs.version.outputs.version_name }}
+    needs: version
+    if: github.ref_name == 'master' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      VERSION_NAME: ${{ needs.version.outputs.version_name }}
+      VERSION_CODE: ${{ needs.version.outputs.version_code }}
+      BRANCH_NAME: ${{ github.ref_name }}
+      RELEASE_TAG: ${{ needs.version.outputs.tag }}
+      RELEASE_CHANNEL: ${{ needs.version.outputs.channel }}
+      GRADLE_TASK: ${{ needs.version.outputs.gradle_task }}
+      REQUIRE_RELEASE_SIGNING: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          lfs: true
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+      # Same tag-only fetch as above: no upstream code is merged. Reservation
+      # validation also considers only upstream release tags reachable from HEAD.
+      - name: Fetch upstream tags and current fork reservations
+        run: |
+          git fetch --no-tags https://github.com/futo-org/android-keyboard.git '+refs/tags/*:refs/tags/upstream/*'
+          git fetch origin 'refs/tags/fork/*:refs/tags/fork/*'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Prepare private release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: python3 tools/release/signing.py
+      - name: Reserve version on this commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python3 tools/release/version.py --reserve version.json
+          git push origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+      - name: Install Android build components
+        shell: bash
+        run: |
+          # sdkmanager can close stdin before yes finishes; avoid pipefail's SIGPIPE.
+          set +o pipefail
+          yes | sdkmanager --licenses > /dev/null
+          set -o pipefail
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+      - name: Build signed release APK
+        run: ./gradlew "$GRADLE_TASK" --no-daemon --stacktrace
+      - name: Prepare APK and verify signing
+        shell: bash
+        run: |
+          mkdir -p dist
+          mapfile -t apks < <(find "build/outputs/apk/$RELEASE_CHANNEL/release" -maxdepth 1 -name '*.apk')
+          test "${#apks[@]}" -eq 1
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "${apks[0]}"
+          cp "${apks[0]}" "dist/keyboard-$VERSION_NAME.apk"
+          cp version.json dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: keyboard-${{ needs.version.outputs.version_name }}
+          path: dist/
+      - name: Publish release in the same workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          # Retrying a published commit never overwrites its existing release assets.
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            echo "Release already published: $RELEASE_TAG"
+            exit 0
+          fi
+          flags=(--latest=false)
+          if [ "$RELEASE_CHANNEL" = unstable ]; then
+            flags+=(--prerelease)
+          else
+            flags=(--latest)
+          fi
+          gh release create "$RELEASE_TAG" dist/* --verify-tag \
+            --title "FUTO Keyboard [ghan1t] $VERSION_NAME" --generate-notes "${flags[@]}"
+      - name: Remove signing material
+        if: always()
+        run: rm -f key.jks keystore.properties
