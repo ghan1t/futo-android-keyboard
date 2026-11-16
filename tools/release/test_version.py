@@ -83,12 +83,12 @@ class VersionTests(unittest.TestCase):
 
     def test_features_are_distinct_and_do_not_increment_stable_counter(self):
         self.commit()
-        a = self.plan('feat/a_b')
-        b = self.plan('feat/a-b')
+        a = self.plan('feat/first')
+        b = self.plan('feat/second')
         self.assertNotEqual(a['tag'], b['tag'])
         self.assertEqual(a['channel'], 'unstable')
         self.assertEqual(self.reserve(a).returncode, 0)
-        self.assertEqual(a, self.plan('feat/a_b'))
+        self.assertEqual(a, self.plan('feat/first'))
         self.assertEqual(self.plan()['counter'], 1)
 
     def test_unrelated_master_release_does_not_change_feature_preview(self):
@@ -107,6 +107,73 @@ class VersionTests(unittest.TestCase):
         self.assertEqual(self.reserve(first).returncode, 0)
         self.git('tag', 'upstream/0.1.31')
         self.assertEqual(first, self.plan())
+
+    def test_feature_distance_starts_at_fork_master_not_upstream(self):
+        self.commit()
+        self.commit()
+        base = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-b', 'feat/example')
+        self.commit()
+        self.commit()
+        plan = self.plan('feat/example')
+        self.assertEqual(plan['version_name'], '0.1.30-ghan1t.1.feat-example.2')
+        self.assertEqual(plan['tag'], 'fork/unstable/' + plan['version_name'])
+        self.assertEqual(plan['branch_base'], base)
+        self.assertEqual(self.reserve(plan).returncode, 0)
+        self.assertEqual(plan, self.plan('feat/example'))
+
+    def test_detached_checkout_prefers_remote_master_and_freezes_base(self):
+        self.commit()
+        base = self.git('rev-parse', 'HEAD')
+        self.git('update-ref', 'refs/remotes/origin/master', base)
+        self.git('checkout', '--detach')
+        self.git('branch', '-f', 'master', 'HEAD~1')
+        self.commit()
+        plan = self.plan('feat/example')
+        self.assertEqual(plan['version_name'], '0.1.30-ghan1t.1.feat-example.1')
+        self.assertEqual(plan['branch_base'], base)
+        # Master catches up between calculation and reservation.
+        self.git('update-ref', 'refs/remotes/origin/master', 'HEAD')
+        self.assertEqual(self.reserve(plan).returncode, 0)
+        self.assertEqual(plan, self.plan('feat/example'))
+
+    def test_rewritten_feature_cannot_overwrite_equal_distance_reservation(self):
+        self.git('checkout', '-b', 'feat/example')
+        base = self.git('rev-parse', 'HEAD')
+        self.git('commit', '--allow-empty', '-m', 'first candidate')
+        first = self.plan('feat/example')
+        self.assertEqual(first['version_name'], '0.1.30-ghan1t.1.feat-example.1')
+        self.assertEqual(self.reserve(first).returncode, 0)
+        self.git('checkout', '-b', 'alternate', base)
+        self.git('commit', '--allow-empty', '-m', 'second candidate')
+        second = self.plan('feat/example')
+        self.assertEqual(first['version_code'], second['version_code'])
+        self.assertEqual(first['version_name'], second['version_name'])
+        self.assertEqual(first['tag'], second['tag'])
+        self.assertIn('already reserved', self.reserve(second).stderr)
+
+    def test_legacy_feature_reservation_keeps_original_version(self):
+        old = self.plan('feat/example')
+        old['version_name'] = '0.1.30-ghan1t.1.feat-example-12345678.0+g' + old['commit'][:12]
+        old['tag'] = 'fork/unstable/' + old['version_name']
+        self.git('tag', '-a', old['tag'], '-m', json.dumps(old))
+        self.assertEqual(old, self.plan('feat/example'))
+        self.assertEqual(self.reserve(old).returncode, 0)
+
+    def test_github_summary_outputs_and_notice(self):
+        summary = self.repo / 'summary.md'
+        output = self.repo / 'outputs.txt'
+        plan_file = self.repo / 'version.json'
+        env = {k: v for k, v in os.environ.items() if not k.startswith('GITHUB_')}
+        env.update(GITHUB_ACTIONS='true', GITHUB_STEP_SUMMARY=str(summary), GITHUB_OUTPUT=str(output))
+        result = subprocess.run(['python3', str(SCRIPT), '--branch', 'master',
+                                 '--output', str(plan_file)], cwd=self.repo,
+                                env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        version = json.loads(plan_file.read_text())['version_name']
+        self.assertTrue(summary.read_text().startswith('# ' + version + '\n'))
+        self.assertIn('version_name=' + version + '\n', output.read_text())
+        self.assertIn('::notice title=Calculated version::' + version, result.stdout)
 
     def test_stale_plan_cannot_tag_different_commit(self):
         plan = self.plan()

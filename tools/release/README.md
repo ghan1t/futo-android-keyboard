@@ -4,12 +4,15 @@ The GitHub Actions `Fork release` workflow runs on branch pushes, never tag push
 Every run calculates the version, prints JSON, writes a job summary, and saves
 `version.json` as an artifact. On `master`, the next job automatically reserves
 the tag, builds the signed stable APK, and publishes a normal GitHub release.
-On feature pushes it stops after the preview. To publish a feature build, choose
+On feature pushes it stops after displaying the calculated version. To publish a feature build, choose
 **Actions → Fork release → Run workflow** and select the branch. That run performs
 both jobs in the branch context and publishes an unstable APK as a prerelease.
-No separate tag pipeline or approval-environment setup is needed. GitHub only
+The version job writes the calculated version prominently to the workflow run’s
+**Summary** page (separate from the expandable step logs). No separate tag pipeline or
+approval-environment setup is needed. GitHub only
 shows the manual-run button after this workflow is on the default branch.
 
+The runners are pinned to Ubuntu 24.04; JavaScript actions use Node.js 24.
 The workflow always checks out the triggering SHA. Branch runs are serialized,
 including version calculation, to prevent two master builds reserving the same
 number. Published assets are never overwritten on retries.
@@ -23,8 +26,13 @@ releases and release candidates are ignored. Two-part versions are padded with
 an error rather than an accidental `0.0.0` release.
 
 - Stable: `0.1.30-ghan1t.1`, then `.2` after the first reservation.
-- Feature: `0.1.30-ghan1t.2.branch-HASH.DISTANCE+gCOMMIT` (next stable counter from reachable stable reservations,
-  sanitized branch plus branch-name hash, commits since upstream, commit hash).
+- Feature: `0.1.30-ghan1t.2.branch.3` (next stable counter from reachable stable
+  reservations, sanitized branch name, and commit count since the common ancestor
+  with our fork's `origin/master`; local `master` is the fallback). The distance
+  is not measured from an upstream release. Neither version names nor tag names
+  contain hashes. The release plan records the commit and common ancestor so
+  reservation remains consistent if master advances between jobs. Existing
+  reservations retain their original version format.
 - A new upstream version starts the stable suffix at `.1`.
 - An annotated `fork/stable/...` or `fork/unstable/...` tag stores the complete
   plan. Rebuilding the same commit on the same branch reuses that plan, even if
@@ -32,8 +40,10 @@ an error rather than an accidental `0.0.0` release.
 
 As requested, tagging precedes compilation. A failed build reserves its number;
 retry the same commit to finish that release. Do not delete or move reservation
-tags. A new commit gets a new version. A stale or conflicting plan fails instead
-of force-pushing a tag.
+tags. Additional feature commits increase the distance. Rewriting a feature branch
+can reuse a distance, and branch names must remain distinct after sanitization
+(for example, `feat/example` becomes `feat-example`). A conflicting reservation
+fails instead of force-pushing a tag.
 
 Android `versionCode` is `100000 + git rev-list --count HEAD`: deterministic,
 independent of the suffix reset, and increasing along master as long as history

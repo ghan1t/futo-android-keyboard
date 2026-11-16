@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Calculate a fork version, or reserve a previously calculated version as a tag."""
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -28,7 +27,7 @@ def release_plans():
     return plans
 
 
-def calculate(branch):
+def calculate(branch, branch_base=None):
     if git('rev-parse', '--is-shallow-repository') == 'true':
         raise ValueError('Version calculation requires full Git history.')
     commit = git('rev-parse', 'HEAD')
@@ -57,11 +56,22 @@ def calculate(branch):
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0]
     counter = max((p['counter'] for p in releases), default=0) + 1
     version = f'{upstream_version}-ghan1t.{counter}'
+    feature = {}
     if channel == 'unstable':
-        slug = re.sub(r'[^a-z0-9-]+', '-', branch.lower()).strip('-')[:40] or 'branch'
-        branch_hash = hashlib.sha256(branch.encode()).hexdigest()[:8]
-        distance = git('rev-list', '--count', upstream_tag + '..HEAD')
-        version += f'.{slug}-{branch_hash}.{distance}+g{commit[:12]}'
+        if branch_base is None:
+            # CI checks out a detached SHA; prefer the fork's remote master.
+            refs = git('for-each-ref', '--format=%(refname)',
+                       'refs/remotes/origin/master', 'refs/heads/master').splitlines()
+            master = next((ref for ref in ('refs/remotes/origin/master', 'refs/heads/master')
+                           if ref in refs), None)
+            if master is None:
+                raise ValueError('Feature versions require origin/master or a local master branch.')
+            branch_base = git('merge-base', master, commit)
+        distance = int(git('rev-list', '--count', f'{branch_base}..{commit}'))
+        slug = re.sub(r'[^a-z0-9-]+', '-', branch.lower()).strip('-') or 'branch'
+        version += f'.{slug}.{distance}'
+        # Freeze the base so master advancing between jobs cannot change the plan.
+        feature = dict(branch_base=branch_base, branch_distance=distance)
     # Total ancestry increases on master without force pushes, even across upstream merges.
     code = 100000 + int(git('rev-list', '--count', 'HEAD'))
     if code > 2100000000:
@@ -70,7 +80,8 @@ def calculate(branch):
                 upstream_tag=upstream_tag, upstream_version=upstream_version,
                 counter=counter, version_name=version, version_code=code,
                 tag=f'fork/{channel}/{version}',
-                gradle_task='assembleStableRelease' if channel == 'stable' else 'assembleUnstableRelease')
+                gradle_task='assembleStableRelease' if channel == 'stable' else 'assembleUnstableRelease',
+                **feature)
 
 
 def reserve(plan):
@@ -81,7 +92,7 @@ def reserve(plan):
         if existing != plan:
             raise ValueError('Version is already reserved for a different plan.')
         return
-    if calculate(plan['branch']) != plan:
+    if calculate(plan['branch'], plan.get('branch_base')) != plan:
         raise ValueError('Release plan is stale. Rerun the workflow to calculate a new version.')
     subprocess.run(['git', 'tag', '-a', plan['tag'], plan['commit'], '-F', '-'],
                    input=json.dumps(plan, sort_keys=True) + '\n', text=True, check=True)
@@ -101,6 +112,8 @@ def main():
         parser.error('--branch is required on a detached checkout')
     serialized = json.dumps(plan, indent=2) + '\n'
     print(serialized, end='')
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        print(f"::notice title=Calculated version::{plan['version_name']}")
     if args.output:
         args.output.write_text(serialized)
     if os.environ.get('GITHUB_OUTPUT'):
@@ -109,7 +122,7 @@ def main():
                 output.write(f'{key}={plan[key]}\n')
     if os.environ.get('GITHUB_STEP_SUMMARY'):
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
-            summary.write(f"## Calculated release\n\nVersion: `{plan['version_name']}`\n\n"
+            summary.write(f"# {plan['version_name']}\n\nCalculated {plan['channel']} version.\n\n"
                           f"Android versionCode: `{plan['version_code']}`\n\n"
                           f"Upstream base: `{plan['upstream_tag']}`\n\n"
                           f"Commit: `{plan['commit']}`\n\nTag: `{plan['tag']}`\n")
