@@ -293,11 +293,6 @@ public class SettingsValues {
         return mInputAttributes.mApplicationSpecifiedCompletionOn;
     }
 
-    /** Saved user preference, before applying editor restrictions. */
-    public boolean isAutoCorrectEnabled() {
-        return mAutoCorrectEnabled;
-    }
-
     public boolean needsToLookupSuggestions() {
         return mInputAttributes.mShouldShowSuggestions
                 && (mAutoCorrectionEnabledPerUserSettings || isSuggestionsEnabledPerUserSettings());

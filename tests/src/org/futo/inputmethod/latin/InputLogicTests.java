@@ -22,7 +22,6 @@ import android.test.suitebuilder.annotation.LargeTest;
 import android.text.TextUtils;
 import android.view.inputmethod.BaseInputConnection;
 
-import org.futo.inputmethod.engine.general.GeneralIME;
 import org.futo.inputmethod.latin.common.Constants;
 import org.futo.inputmethod.latin.define.DecoderSpecificConstants;
 import org.futo.inputmethod.latin.settings.Settings;
@@ -155,26 +154,6 @@ public class InputLogicTests extends InputTestsBase {
         assertEquals("simple auto-correct", EXPECTED_RESULT, mEditText.getText().toString());
     }
 
-    private void checkAutoCorrectionToggleDuringComposition(boolean initiallyEnabled,
-            String separator) {
-        final boolean previous = getBooleanPreference(Settings.PREF_AUTO_CORRECTION, true);
-        try {
-            setAutoCorrectionWithoutRestart(initiallyEnabled);
-            type("tgis");
-            // Exercise a cached decision, rather than only a query still waiting to start.
-            final GeneralIME ime = (GeneralIME) getService().getImeManager()
-                    .getActiveIME(Settings.getInstance().getCurrent());
-            assertTrue(ime.ensureSuggestionsCompleted());
-            setAutoCorrectionWithoutRestart(!initiallyEnabled);
-            type(separator);
-            assertEquals("toggle must refresh the composed word",
-                    (initiallyEnabled ? "tgis" : "this") + separator,
-                    mEditText.getText().toString());
-        } finally {
-            setAutoCorrectionWithoutRestart(previous);
-        }
-    }
-
     private void setAutoCorrectionWithoutRestart(boolean enabled) {
         setBooleanPreference(Settings.PREF_AUTO_CORRECTION, enabled, true);
         // Deliver the normal preference callback synchronously on the test thread.
@@ -192,22 +171,6 @@ public class InputLogicTests extends InputTestsBase {
         } finally {
             setAutoCorrectionWithoutRestart(previous);
         }
-    }
-
-    public void testDisableAutoCorrectionBeforeSpace() {
-        checkAutoCorrectionToggleDuringComposition(true, " ");
-    }
-
-    public void testEnableAutoCorrectionBeforeSpace() {
-        checkAutoCorrectionToggleDuringComposition(false, " ");
-    }
-
-    public void testDisableAutoCorrectionBeforePunctuation() {
-        checkAutoCorrectionToggleDuringComposition(true, ".");
-    }
-
-    public void testEnableAutoCorrectionBeforePunctuation() {
-        checkAutoCorrectionToggleDuringComposition(false, ".");
     }
 
     public void testAutoCorrectWithQuote() {

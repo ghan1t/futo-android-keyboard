@@ -534,19 +534,8 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
     private val sequenceIdCompleted = AtomicInteger(0)
     private val computationMutex = Mutex()
     private var timeTakenToUpdate = 40L
-    fun onAutoCorrectionSettingChanged() {
-        inputLogic.mSuggest.setAutoCorrectionThreshold(settings.current.mAutoCorrectionThreshold)
-        // Invalidate in-flight results and recompute the current word. The normal commit path
-        // waits for this generation, even if space/punctuation follows the toggle immediately.
-        if (inputLogic.mWordComposer.isComposingWord && !inputLogic.mWordComposer.isBatchMode) {
-            updateSuggestions(SuggestedWords.INPUT_STYLE_TYPING)
-        }
-    }
-
     fun updateSuggestions(inputStyle: Int) {
         updateSuggestionJob?.cancel()
-        // Also invalidate older results when settings now suppress suggestion lookup.
-        val seqId = sequenceId.incrementAndGet()
 
         val isSwipe = inputStyle == SuggestedWords.INPUT_STYLE_TAIL_BATCH
                 || inputStyle == SuggestedWords.INPUT_STYLE_UPDATE_BATCH
@@ -562,6 +551,8 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
                 return
             }
         }
+
+        val seqId = sequenceId.incrementAndGet()
 
         val delayTime = when {
             // With transformer off keep 40ms static delay for legacy reasons (less battery use)
