@@ -1,0 +1,15 @@
+name: Fork release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain branch selection
+        run: |
+          echo 'Select your feature branch under Run workflow to run its release workflow.' >> "$GITHUB_STEP_SUMMARY"
