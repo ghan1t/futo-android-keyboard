@@ -11,15 +11,25 @@ The version job writes the calculated version prominently to the workflow run’
 **Summary** page (separate from the expandable step logs). No separate tag pipeline or
 approval-environment setup is needed. GitHub only
 shows the manual-run button after this workflow is on the default branch.
+Open the workflow from the Actions sidebar to find **Run workflow**. **Re-run jobs**
+on an existing push run keeps the original push event, so the feature release job
+remains skipped; it does not turn that run into a manual release.
 
 The runners are pinned to Ubuntu 24.04; JavaScript actions use Node.js 24.
 The workflow always checks out the triggering SHA. Branch runs are serialized,
 including version calculation, to prevent two master builds reserving the same
 number. Published assets are never overwritten on retries.
+The release job uses the saved `version.json` without recalculating the version
+or fetching upstream tags again. Before tagging, it checks that the plan matches
+the checked-out commit and rejects a tag already reserved for a different plan.
+The tag push also rejects a conflicting reservation created after that check.
 
 ## Versions
 
 Upstream tags are fetched into `upstream/*`, separate from our `fork/*` tags.
+These metadata fetches disable submodule recursion, avoiding requests for
+unavailable historical submodule commits. The release checkout separately fetches
+the submodules required by the commit being built.
 The highest numeric upstream release reachable from HEAD is the base; unmerged
 releases and release candidates are ignored. Two-part versions are padded with
 `.0`; three- and four-part versions are preserved. Missing upstream tags cause
@@ -30,8 +40,8 @@ an error rather than an accidental `0.0.0` release.
   reservations, sanitized branch name, and commit count since the common ancestor
   with our fork's `origin/master`; local `master` is the fallback). The distance
   is not measured from an upstream release. Neither version names nor tag names
-  contain hashes. The release plan records the commit and common ancestor so
-  reservation remains consistent if master advances between jobs. Existing
+  contain hashes. The release plan records the commit and common ancestor used
+  for the calculation. Existing
   reservations retain their original version format.
 - A new upstream version starts the stable suffix at `.1`.
 - An annotated `fork/stable/...` or `fork/unstable/...` tag stores the complete
@@ -80,7 +90,7 @@ allowed to run the signing job; external pull requests do not trigger it.
 ## Local use
 
 ```sh
-git fetch --no-tags https://github.com/futo-org/android-keyboard.git '+refs/tags/*:refs/tags/upstream/*'
+git fetch --no-tags --no-recurse-submodules https://github.com/futo-org/android-keyboard.git '+refs/tags/*:refs/tags/upstream/*'
 python3 tools/release/version.py --branch master --output /tmp/version.json
 ```
 

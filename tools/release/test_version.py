@@ -108,6 +108,19 @@ class VersionTests(unittest.TestCase):
         self.git('tag', 'upstream/0.1.31')
         self.assertEqual(first, self.plan())
 
+    def test_reservation_uses_saved_plan_without_upstream_tags(self):
+        plan = self.plan()
+        self.git('tag', '-d', 'upstream/0.1.30')
+        self.assertEqual(self.reserve(plan).returncode, 0)
+        self.assertEqual(json.loads(self.git('for-each-ref', '--format=%(contents)',
+                                            'refs/tags/' + plan['tag'])), plan)
+
+    def test_upstream_change_between_jobs_does_not_change_reservation(self):
+        plan = self.plan()
+        self.git('tag', 'upstream/0.1.31')
+        self.assertEqual(self.reserve(plan).returncode, 0)
+        self.assertEqual(plan, self.plan())
+
     def test_feature_distance_starts_at_fork_master_not_upstream(self):
         self.commit()
         self.commit()

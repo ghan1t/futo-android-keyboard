@@ -27,7 +27,7 @@ def release_plans():
     return plans
 
 
-def calculate(branch, branch_base=None):
+def calculate(branch):
     if git('rev-parse', '--is-shallow-repository') == 'true':
         raise ValueError('Version calculation requires full Git history.')
     commit = git('rev-parse', 'HEAD')
@@ -58,19 +58,18 @@ def calculate(branch, branch_base=None):
     version = f'{upstream_version}-ghan1t.{counter}'
     feature = {}
     if channel == 'unstable':
-        if branch_base is None:
-            # CI checks out a detached SHA; prefer the fork's remote master.
-            refs = git('for-each-ref', '--format=%(refname)',
-                       'refs/remotes/origin/master', 'refs/heads/master').splitlines()
-            master = next((ref for ref in ('refs/remotes/origin/master', 'refs/heads/master')
-                           if ref in refs), None)
-            if master is None:
-                raise ValueError('Feature versions require origin/master or a local master branch.')
-            branch_base = git('merge-base', master, commit)
+        # CI checks out a detached SHA; prefer the fork's remote master.
+        refs = git('for-each-ref', '--format=%(refname)',
+                   'refs/remotes/origin/master', 'refs/heads/master').splitlines()
+        master = next((ref for ref in ('refs/remotes/origin/master', 'refs/heads/master')
+                       if ref in refs), None)
+        if master is None:
+            raise ValueError('Feature versions require origin/master or a local master branch.')
+        branch_base = git('merge-base', master, commit)
         distance = int(git('rev-list', '--count', f'{branch_base}..{commit}'))
         slug = re.sub(r'[^a-z0-9-]+', '-', branch.lower()).strip('-') or 'branch'
         version += f'.{slug}.{distance}'
-        # Freeze the base so master advancing between jobs cannot change the plan.
+        # Record how the distance was calculated for the release plan.
         feature = dict(branch_base=branch_base, branch_distance=distance)
     # Total ancestry increases on master without force pushes, even across upstream merges.
     code = 100000 + int(git('rev-list', '--count', 'HEAD'))
@@ -92,8 +91,7 @@ def reserve(plan):
         if existing != plan:
             raise ValueError('Version is already reserved for a different plan.')
         return
-    if calculate(plan['branch'], plan.get('branch_base')) != plan:
-        raise ValueError('Release plan is stale. Rerun the workflow to calculate a new version.')
+    # The version job's saved plan is authoritative; do not recalculate it here.
     subprocess.run(['git', 'tag', '-a', plan['tag'], plan['commit'], '-F', '-'],
                    input=json.dumps(plan, sort_keys=True) + '\n', text=True, check=True)
 
