@@ -194,8 +194,17 @@ class BasicThemeProvider(val context: Context, val colorScheme: KeyboardColorSch
     }
 
     val icons: HashMap<String, Drawable?> = hashMapOf()
+    private val inactiveActionIcons = hashMapOf<String, Pair<Action, Drawable?>>()
+    private val actionPreferences by lazy { PreferenceUtils.getDefaultSharedPreferences(context) }
+
     override fun getIcon(iconName: String): Drawable? {
         if(iconName == KeyboardIconsSet.ICON_UNDEFINED) return null
+
+        inactiveActionIcons[iconName]?.let { (action, inactiveIcon) ->
+            if (!actionPreferences.getBoolean(action.activeStatePrefKey!!, action.activeStateDefault)) {
+                return inactiveIcon
+            }
+        }
 
         if(!icons.containsKey(iconName)) {
             Log.e("BasicThemeProvider", "Unknown icon $iconName")
@@ -277,6 +286,13 @@ class BasicThemeProvider(val context: Context, val colorScheme: KeyboardColorSch
 
     val expertMode: Boolean
     val showKeyHints: Boolean
+
+    private fun addActionIcon(iconName: String, action: Action, tint: Int) {
+        addIcon(iconName, action.icon, tint)
+        if (action.activeStatePrefKey != null && action.iconInactive != null) {
+            inactiveActionIcons[iconName] = action to AppCompatResources.getDrawable(context, action.iconInactive)
+        }
+    }
 
     private fun addIcon(iconName: String, drawableIntResId: Int, tint: Int) {
         addIcon(iconName, AppCompatResources.getDrawable(
@@ -394,12 +410,12 @@ class BasicThemeProvider(val context: Context, val colorScheme: KeyboardColorSch
 
         // Add by name (action_emoji)
         AllActionsMap.forEach { (i, it) ->
-            addIcon("action_${i}", it.icon, onKeyColor)
+            addActionIcon("action_${i}", it, onKeyColor)
         }
 
         // Add by id (action_0)
         AllActions.forEachIndexed { i, it ->
-            addIcon("action_${i}", it.icon, onKeyColor)
+            addActionIcon("action_${i}", it, onKeyColor)
         }
 
         if(!showKeyHints) {

@@ -17,6 +17,7 @@
 package org.futo.inputmethod.keyboard;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -36,6 +37,9 @@ import android.view.View;
 import org.futo.inputmethod.keyboard.internal.KeyDrawParams;
 import org.futo.inputmethod.keyboard.internal.KeyVisualAttributes;
 import org.futo.inputmethod.latin.uix.DynamicThemeProvider;
+import org.futo.inputmethod.latin.uix.Action;
+import org.futo.inputmethod.latin.uix.PreferenceUtils;
+import org.futo.inputmethod.latin.uix.actions.RegistryKt;
 import org.futo.inputmethod.latin.R;
 import org.futo.inputmethod.latin.common.Constants;
 import org.futo.inputmethod.latin.uix.theme.KeyDrawingConfiguration;
@@ -83,6 +87,18 @@ import javax.annotation.Nullable;
  * @attr ref R.styleable#Keyboard_Key_keyPreviewTextColor
  */
 public class KeyboardView extends View {
+    // Keep a strong reference: SharedPreferences stores its listeners weakly.
+    private final SharedPreferences.OnSharedPreferenceChangeListener mActionStateListener =
+            (prefs, changedKey) -> {
+                for (final Action action : RegistryKt.getAllActions()) {
+                    final String stateKey = action.getActiveStatePrefKey();
+                    if (stateKey != null && (changedKey == null || stateKey.equals(changedKey))) {
+                        invalidateAllKeys();
+                        break;
+                    }
+                }
+            };
+
     // XML attributes
     private final KeyVisualAttributes mKeyVisualAttributes;
     // Default keyLabelFlags from {@link KeyboardTheme}.
@@ -700,7 +716,17 @@ public class KeyboardView extends View {
     }
 
     @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        PreferenceUtils.INSTANCE.getDefaultSharedPreferences(getContext())
+                .registerOnSharedPreferenceChangeListener(mActionStateListener);
+        invalidateAllKeys();
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
+        PreferenceUtils.INSTANCE.getDefaultSharedPreferences(getContext())
+                .unregisterOnSharedPreferenceChangeListener(mActionStateListener);
         super.onDetachedFromWindow();
         freeOffscreenBuffer();
     }
