@@ -1,32 +1,39 @@
-# FUTO Keyboard
+# FUTO Keyboard — ghan1t fork
+
+This is [ghan1t's fork](https://github.com/ghan1t/futo-android-keyboard) of
+[FUTO Keyboard](https://github.com/futo-org/android-keyboard). It keeps a small set
+of additional features and uses separate app names and package IDs so the fork
+can be installed alongside upstream.
+
+## Changes added to upstream
+
+| Change | Source / attribution |
+| --- | --- |
+| Autocorrect toggle in the configurable action bar, with on/off icons and accessibility feedback | Adapted from [VibedByKaKi/futo-keyboard #4](https://github.com/VibedByKaKi/futo-keyboard/pull/4), commit [`0fdfcfd`](https://github.com/VibedByKaKi/futo-keyboard/commit/0fdfcfd79c8954890432ac437e2d6311e0e5695a), by KaKi87. |
+| Separate stable/development app names and IDs; update link points to this fork | Implemented in this fork. <br/>stable: `FUTO Keyboard [ghan1t]` / `org.ghan1t.inputmethod.latin`; <br/>development: `FUTO Keyboard [ghan1t Dev]` / `org.ghan1t.inputmethod.latin.unstable`. |
+| Git-derived `-ghan1t.N` versions and signed GitHub releases: automatic on `master`, manual on feature branches | Implemented in this fork; build setup informed by [VibedByKaKi's workflows](https://github.com/VibedByKaKi/futo-keyboard/tree/dev/.github/workflows). See the [release workflow](.github/workflows/fork-release.yml) and [versioning/signing guide](tools/release/README.md). |
+
+See [Releases](https://github.com/ghan1t/futo-android-keyboard/releases) for published fork builds.
+Fork releases use their own signing key and are not official FUTO releases.
+
+## About upstream
 
 The goal is to make a good modern keyboard that stays offline and doesn't spy on you. This keyboard is a fork of [LatinIME, The Android Open-Source Keyboard](https://android.googlesource.com/platform/packages/inputmethods/LatinIME), with significant changes made to it.
 
-Check out the [FUTO Keyboard website](https://keyboard.futo.tech/) for downloads and more information.
+Check out the [FUTO Keyboard website](https://keyboard.futo.tech/) for official upstream downloads and more information.
 
 The code is licensed under the [FUTO Source First License 1.1](LICENSE.md).
 
 ## Issue tracking and contributing
 
-Please check the GitHub repository to report issues: [https://github.com/futo-org/android-keyboard/](https://github.com/futo-org/android-keyboard/)
-
-The source code is hosted on our [internal GitLab](https://gitlab.futo.org/keyboard/latinime) and mirrored to [GitHub](https://github.com/futo-org/android-keyboard/). As registration is closed on our internal GitLab, we use GitHub instead for issues and pull requests.
-
-If you want to help translate the app, please do so via our Pontoon instance: https://i18n-keyboard.futo.org/
-
-Due to custom license, pull requests to this repository require signing a [CLA](https://cla.futo.org/) which you can do after opening a PR. Contributions to the [layouts repo](https://github.com/futo-org/futo-keyboard-layouts) don't require CLA as they're Apache-2.0
-
-Please do not submit AI-generated pull requests, as these tend to make the codebase more difficult to understand. Pull requests made with clear heavy use of AI may be closed without comment. Please also avoid using AI to write issues, and try to explain it in your own words instead.
-
-## Layouts
-
-If you want to contribute layouts, check out the [layouts repo](https://github.com/futo-org/futo-keyboard-layouts).
+Report problems with this fork in [this repository's issue tracker](https://github.com/ghan1t/futo-android-keyboard/issues).
+For issues reproducible in official FUTO builds, use the [upstream issue tracker](https://github.com/futo-org/android-keyboard/issues).
 
 ## Building
 
 When cloning the repository, you must perform a recursive clone to fetch all dependencies:
 ```
-git clone --recursive https://gitlab.futo.org/keyboard/latinime.git
+git clone --recursive https://github.com/ghan1t/futo-android-keyboard.git
 ```
 
 If you forgot to specify recursive clone, use this to fetch submodules:
@@ -42,7 +49,9 @@ You can then open the project in Android Studio and build it that way, or use gr
 
 ## APK signing
 
-For official FUTO Keyboard versions, you can verify the APK's signing key fingerprint for integrity.
+Fork release signing is described in the [signing guide](tools/release/README.md#signing-setup).
+The fingerprints below belong to **official upstream builds only** and do not
+identify this fork's APKs.
 
 ```
 Signing key fingerprint for all versions except Google Play:

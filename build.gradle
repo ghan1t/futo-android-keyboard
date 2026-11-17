@@ -84,6 +84,8 @@ final def translationsWithoutEngValues = { final String path ->
     tasks.register("prepareResFilter${taskNameSuffix}", Copy) {
         from(sourceDir) {
             include 'values-*/**'
+            // Use the fork's default app/service names in every locale.
+            exclude 'values-*/strings-appname.xml'
 
             filter { String line ->
                 def matcher = line =~ /<string name="([^"]+)"[^>]*>(.+)<\/string>/
@@ -201,8 +203,8 @@ android {
         versionName getVersionName()
         versionCode getVersionCode()
 
-        applicationId 'org.futo.inputmethod.latin'
-        testApplicationId 'org.futo.inputmethod.latin.tests'
+        applicationId 'org.ghan1t.inputmethod.latin'
+        testApplicationId 'org.ghan1t.inputmethod.latin.tests'
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = false
     }
@@ -243,6 +245,10 @@ android {
         project.logger.lifecycle('crashreporting.properties not found, crash reporting will be disabled')
     }
 
+
+    if (System.getenv('REQUIRE_RELEASE_SIGNING') == 'true' && !keystorePropertiesFile.exists()) {
+        throw new GradleException('Release signing is required, but keystore.properties is missing')
+    }
 
     buildTypes {
         debug {
@@ -285,7 +291,7 @@ android {
         unstable {
             dimension "buildType"
             applicationIdSuffix ".unstable"
-            versionNameSuffix "-unstable"
+            // The release script supplies the complete branch-aware version name.
 
             buildConfigField "boolean", "IS_PLAYSTORE_BUILD", "false"
             buildConfigField "boolean", "UPDATE_CHECKING", "true"

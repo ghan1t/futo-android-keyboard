@@ -154,6 +154,25 @@ public class InputLogicTests extends InputTestsBase {
         assertEquals("simple auto-correct", EXPECTED_RESULT, mEditText.getText().toString());
     }
 
+    private void setAutoCorrectionWithoutRestart(boolean enabled) {
+        setBooleanPreference(Settings.PREF_AUTO_CORRECTION, enabled, true);
+        // Deliver the normal preference callback synchronously on the test thread.
+        Settings.getInstance().onSharedPreferenceChanged(null, Settings.PREF_AUTO_CORRECTION);
+    }
+
+    public void testPickSuggestionWithAutoCorrectionDisabled() {
+        final boolean previous = getBooleanPreference(Settings.PREF_AUTO_CORRECTION, true);
+        try {
+            setAutoCorrectionWithoutRestart(false);
+            type("tgis");
+            pickSuggestionManually("this");
+            assertEquals("explicit suggestions remain usable", "this",
+                    mEditText.getText().toString());
+        } finally {
+            setAutoCorrectionWithoutRestart(previous);
+        }
+    }
+
     public void testAutoCorrectWithQuote() {
         final String STRING_TO_TYPE = "didn' ";
         final String EXPECTED_RESULT = "didn't ";
