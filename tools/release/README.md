@@ -6,16 +6,18 @@ Every run calculates the version, prints JSON, writes a job summary, and saves
 the tag, builds the signed stable APK, and publishes a normal GitHub release.
 On feature pushes it stops after displaying the calculated version. To publish a feature build, choose
 **Actions → Fork release → Run workflow** and select the branch. That run performs
-both jobs in the branch context and publishes an unstable APK as a prerelease.
+both jobs in the branch context, reserves a version tag, and publishes the signed
+unstable APK as a GitHub prerelease. Both channels also upload workflow artifacts.
+Only stable releases from `master` are marked as the latest release.
 The version job writes the calculated version prominently to the workflow run’s
-**Summary** page (separate from the expandable step logs). No separate tag pipeline or
-approval-environment setup is needed. GitHub only
+**Summary** page (separate from the expandable step logs). No separate tag pipeline
+is used. GitHub only
 shows the manual-run button after this workflow is on the default branch.
 Open the workflow from the Actions sidebar to find **Run workflow**. **Re-run jobs**
 on an existing push run keeps the original push event, so the feature release job
 remains skipped; it does not turn that run into a manual release.
 
-The runners are pinned to Ubuntu 24.04; JavaScript actions use Node.js 24.
+The runners use `ubuntu-latest`; JavaScript actions use Node.js 24.
 The workflow always checks out the triggering SHA. Branch runs are serialized,
 including version calculation, to prevent two master builds reserving the same
 number. Published assets are never overwritten on retries.
@@ -73,12 +75,19 @@ APK do not migrate automatically to these new IDs.
 ## Signing setup
 
 Create a private keystore with Homebrew JDK 21's `keytool`, keep an encrypted
-backup, and configure these repository Actions secrets:
+backup, and configure these environment secrets in both GitHub environments,
+`stable` and `unstable` (Settings → Environments):
 
 - `KEYSTORE_BASE64`: base64-encoded contents of the keystore.
 - `KEYSTORE_PASSWORD`: keystore password.
 - `KEY_ALIAS`: signing-key alias.
 - `KEY_PASSWORD`: key password (usually the same as the store password for PKCS12).
+
+The release job selects `stable` on `master` and `unstable` on feature branches,
+and follows the selected environment's protection rules. Both environments may
+contain the same signing key. Restrict `stable` to `master` and `unstable` to
+trusted feature branches. Keep signing secrets in these environments rather than
+repository secrets so environment protections govern access.
 
 The workflow fails before reserving a tag if a secret is missing. It materializes
 ignored signing files only on the runner and deletes them in an always-run step.

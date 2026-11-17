@@ -65,7 +65,7 @@ jobs:
   release:
     name: Build and publish release
     needs: version
-    environment: signing
+    environment: ${{ github.ref == 'refs/heads/master' && 'stable' || 'unstable' }}
     if: github.ref_name == 'master' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -140,7 +140,7 @@ jobs:
         with:
           name: keyboard-${{ needs.version.outputs.version_name }}
           path: dist/
-      - name: Publish release in the same workflow
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -150,11 +150,9 @@ jobs:
             echo "Release already published: $RELEASE_TAG"
             exit 0
           fi
-          flags=(--latest=false)
+          flags=(--latest)
           if [ "$RELEASE_CHANNEL" = unstable ]; then
-            flags+=(--prerelease)
-          else
-            flags=(--latest)
+            flags=(--prerelease --latest=false)
           fi
           gh release create "$RELEASE_TAG" dist/* --verify-tag \
             --title "FUTO Keyboard [ghan1t] $VERSION_NAME" --generate-notes "${flags[@]}"
