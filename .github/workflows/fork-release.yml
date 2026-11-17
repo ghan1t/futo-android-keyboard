@@ -65,6 +65,7 @@ jobs:
   release:
     name: Build and publish release
     needs: version
+    environment: signing
     if: github.ref_name == 'master' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
