@@ -114,11 +114,17 @@ jobs:
       - name: Install Android build components
         shell: bash
         run: |
+          # GitHub's runner image installs this tool outside the default PATH.
+          sdk_manager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$sdk_manager" ]]; then
+            echo "::error::Android SDK manager not found at $sdk_manager"
+            exit 1
+          fi
           # sdkmanager can close stdin before yes finishes; avoid pipefail's SIGPIPE.
           set +o pipefail
-          yes | sdkmanager --licenses > /dev/null
+          yes | "$sdk_manager" --licenses > /dev/null
           set -o pipefail
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+          "$sdk_manager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
       - name: Build signed release APK
         run: ./gradlew "$GRADLE_TASK" --no-daemon --stacktrace
       - name: Prepare APK and verify signing
