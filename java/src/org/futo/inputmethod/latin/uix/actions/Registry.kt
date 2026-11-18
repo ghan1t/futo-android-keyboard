@@ -44,6 +44,7 @@ val AllActionsMap = mapOf(
     "right" to ArrowRightAction,
     "font_typer" to FontTyperAction,
     "toggle_autocorrect" to AutoCorrectToggleAction,
+    "fleksy_mode" to FleksyModeAction,
 )
 
 val ActionToId = AllActionsMap.entries.associate { it.value to it.key }

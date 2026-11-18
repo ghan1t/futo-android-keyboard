@@ -69,6 +69,9 @@
 
     <!-- Option to decide the auto correction threshold score -->
     <!-- Option to enable auto correction [CHAR LIMIT=20]-->
+    <string name="fleksy_mode">Fleksy mode</string>
+    <string name="fleksy_mode_enabled">Fleksy mode enabled</string>
+    <string name="fleksy_mode_disabled">Fleksy mode disabled</string>
     <string name="toggle_autocorrect">Toggle autocorrect</string>
     <string name="toggle_autocorrect_enabled">Autocorrect enabled</string>
     <string name="toggle_autocorrect_disabled">Autocorrect disabled</string>

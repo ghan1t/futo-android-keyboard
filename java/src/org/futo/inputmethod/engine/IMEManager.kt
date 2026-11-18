@@ -59,6 +59,11 @@ class IMEManager(
     private val imes: MutableMap<IMEKind, IMEInterface> = mutableMapOf()
     private var activeIme by mutableStateOf<IMEInterface?>(null)
 
+    val fleksyEngine: GeneralIME?
+        get() = (activeIme as? GeneralIME)?.takeIf {
+            currentActionInputTransactionIME == null && it.isFleksyEnabled()
+        }
+
     @Composable fun isImeLoading(): Boolean = activeIme?.getLoadingState()?.value == true
 
     private fun getActiveIMEKind(settingsValues: SettingsValues): IMEKind =
@@ -276,6 +281,8 @@ class IMEManager(
         composingSpanStart: Int,
         composingSpanEnd: Int
     ) {
+        fleksyEngine?.observeFleksySelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd,
+            composingSpanStart, composingSpanEnd)
         val sel = Selection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, composingSpanStart, composingSpanEnd, currHash())
         pendingUpdateSelection?.first?.cancel()
         pendingUpdateSelection = service.lifecycleScope.launch {

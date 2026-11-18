@@ -16,6 +16,7 @@
 
 package org.futo.inputmethod.keyboard;
 
+import org.futo.inputmethod.gestures.FleksyTouchController;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.os.SystemClock;
@@ -126,6 +127,35 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
     private final BogusMoveEventDetector mBogusMoveEventDetector = new BogusMoveEventDetector();
 
     private boolean mIsDetectingGesture = false; // per PointerTracker.
+    private final FleksyTouchController mFleksy =
+            new FleksyTouchController(direction -> sListener.onFleksyAction(direction));
+
+    public static void cancelFleksyGestures() {
+        for (PointerTracker tracker : sTrackers) {
+            if (tracker.mFleksy.getTracking()) {
+                sTimerProxy.cancelKeyTimersOf(tracker);
+                tracker.cancelTrackingForAction();
+            }
+        }
+    }
+
+    public static void cancelSwipeTypingForModeChange() {
+        for (PointerTracker tracker : sTrackers) {
+            if (tracker.mIsDetectingGesture) {
+                tracker.cancelBatchInput();
+                sTimerProxy.cancelKeyTimersOf(tracker);
+                tracker.cancelTrackingForAction();
+            }
+        }
+    }
+
+    private void moveFleksy(int x, int y) {
+        if (mFleksy.move(x, y)) {
+            sTimerProxy.cancelKeyTimersOf(this);
+            mIsTrackingForActionDisabled = true;
+        }
+    }
+
     private static boolean sInGesture = false;
     private static TypingTimeRecorder sTypingTimeRecorder;
 
@@ -610,6 +640,12 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
     public void processMotionEvent(final MotionEvent me, final KeyDetector keyDetector) {
         final int action = me.getActionMasked();
         final long eventTime = me.getEventTime();
+        if (action == MotionEvent.ACTION_POINTER_DOWN) {
+            // Overlapping taps still type. An already activated swipe has disabled its tap.
+            for (PointerTracker tracker : sTrackers) tracker.mFleksy.stop();
+        } else if (action == MotionEvent.ACTION_CANCEL) {
+            cancelFleksyGestures();
+        }
         if (action == MotionEvent.ACTION_MOVE) {
             // When this pointer is the only active pointer and is showing a more keys panel,
             // we should ignore other pointers' motion event.
@@ -634,7 +670,7 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         switch (action) {
         case MotionEvent.ACTION_DOWN:
         case MotionEvent.ACTION_POINTER_DOWN:
-            onDownEvent(x, y, eventTime, keyDetector);
+            onDownEvent(x, y, eventTime, keyDetector, me.getPointerCount() == 1);
             break;
         case MotionEvent.ACTION_UP:
         case MotionEvent.ACTION_POINTER_UP:
@@ -647,7 +683,8 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
     }
 
     private void onDownEvent(final int x, final int y, final long eventTime,
-            final KeyDetector keyDetector) {
+            final KeyDetector keyDetector, final boolean singlePointer) {
+        mFleksy.stop();
         setKeyDetectorInner(keyDetector);
         if (DEBUG_EVENT) {
             printTouchEvent("onDownEvent:", x, y, eventTime);
@@ -679,6 +716,12 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         sPointerTrackerQueue.add(this);
         onDownEventInternal(x, y, eventTime);
 
+        if (sListener.isFleksyEnabled()) {
+            if (singlePointer && key != null && key == mCurrentKey && FleksyTouchController.accepts(key)) {
+                mFleksy.start(x, y, mKeyboard.mMostCommonKeyWidth);
+            }
+            return;
+        }
         if (!sGestureEnabler.shouldHandleGesture()) {
             return;
         }
@@ -814,6 +857,10 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
     }
 
     private void onMoveEvent(final int x, final int y, final long eventTime, final MotionEvent me) {
+        if (mFleksy.getTracking()) {
+            moveFleksy(x, y);
+            return;
+        }
         if (DEBUG_MOVE_EVENT) {
             printTouchEvent("onMoveEvent:", x, y, eventTime);
         }
@@ -1083,6 +1130,10 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             printTouchEvent("onUpEvent  :", x, y, eventTime);
         }
 
+        if (mFleksy.getTracking()) {
+            moveFleksy(x, y);
+            mFleksy.stop();
+        }
         sTimerProxy.cancelUpdateBatchInputTimer(this);
         if (!sInGesture) {
             if (mCurrentKey != null && mCurrentKey.isModifier()) {
@@ -1105,6 +1156,7 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         if (DEBUG_EVENT) {
             printTouchEvent("onPhntEvent:", mLastX, mLastY, eventTime);
         }
+        mFleksy.stop();
         onUpEventInternal(mLastX, mLastY, eventTime);
         cancelTrackingForAction();
     }
@@ -1200,6 +1252,7 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
 
     @Override
     public void cancelTrackingForAction() {
+        mFleksy.stop();
         if (isShowingMoreKeysPanel()) {
             return;
         }
@@ -1211,6 +1264,7 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
     }
 
     public void onLongPressed() {
+        mFleksy.stop();
         sTimerProxy.cancelLongPressTimersOf(this);
         if (isShowingMoreKeysPanel()) {
             return;

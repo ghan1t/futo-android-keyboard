@@ -1,5 +1,7 @@
 package org.futo.inputmethod.engine.general
 
+import org.futo.inputmethod.gestures.FleksyGestureController
+import org.futo.inputmethod.gestures.SwipeAction
 import android.os.Build
 import android.os.Looper
 import android.util.Log
@@ -110,6 +112,15 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
         helper, this, dictionaryFacilitator,
         this
     )
+
+    private val fleksy = FleksyGestureController(helper, inputLogic) {
+        helper.requestCursorUpdate()
+        helper.keyboardSwitcher.requestUpdatingShiftState(getCurrentAutoCapsState())
+        updateSuggestions(SuggestedWords.INPUT_STYLE_TYPING)
+    }
+
+    fun isFleksyEnabled() = fleksy.enabled
+    fun onFleksyAction(action: SwipeAction) = fleksy.perform(action)
 
     private val settings = Settings.getInstance()
 
@@ -227,6 +238,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
     }
 
     override fun onDestroy() {
+        fleksy.finish()
         dictionaryFacilitator.closeDictionaries()
         languageModelFacilitator.saveHistoryLog()
 
@@ -243,6 +255,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
     private val expandableExpandableCfg = ExpandableSuggestionBarConfiguration(true, false)
     private var expandableCfg: ExpandableSuggestionBarConfiguration = NonExpandableSuggestionBar
     override fun onStartInput() {
+        fleksy.start()
         expandableCfg = if(helper.context.getSetting(UseExpandableSuggestionsForGeneralIME)) {
             expandableExpandableCfg
         } else {
@@ -286,10 +299,19 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
     }
 
     override fun onFinishInput() {
+        fleksy.finish()
         inputLogic.finishInput()
         dictionaryFacilitator.onFinishInput(context)
         updateSuggestionJob?.cancel()
         delayedSync()
+    }
+
+    // IMEManager coalesces selection notifications. Observe an excursion before a
+    // second callback can move the cursor back to the correction.
+    fun observeFleksySelection(oldStart: Int, oldEnd: Int, start: Int, end: Int,
+                               composingStart: Int, composingEnd: Int) {
+        if (!inputLogic.mConnection.isBelatedExpectedUpdate(oldStart, start, oldEnd, end,
+                composingStart, composingEnd)) fleksy.reset()
     }
 
     override fun onUpdateSelection(
@@ -314,6 +336,8 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
     private fun onEventInternal(event: Event, ignoreSuggestionUpdate: Boolean = false) {
         helper.requestCursorUpdate()
 
+        fleksy.clearHistory()
+        val lastBefore = inputLogic.mLastComposedWord
         val cursorBefore = inputLogic.mConnection.mExpectedSelStart
 
         val inputTransaction = when (event.eventType) {
@@ -374,6 +398,11 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
 
         val cursorAfter = inputLogic.mConnection.mExpectedSelStart
 
+        val last = inputLogic.mLastComposedWord
+        if (fleksy.enabled && inputTransaction?.didAutoCorrect() == true &&
+            last !== lastBefore && last.canRevertCommit()) {
+            fleksy.history.remember(cursorAfter, last.mTypedWord, last.mCommittedWord.toString(), last.mSeparatorString)
+        }
         inputLogic.afterEventCursorDelta(cursorBefore, cursorAfter - cursorBefore)
 
         when(inputTransaction?.requiredShiftUpdate) {
@@ -611,6 +640,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
     }
 
     override fun onStartBatchInput() {
+        fleksy.reset()
         inputLogic.onStartBatchInput(
             settings.current,
             helper.keyboardSwitcher,

@@ -16,6 +16,8 @@
 
 package org.futo.inputmethod.latin;
 
+import org.futo.inputmethod.engine.general.GeneralIME;
+import org.futo.inputmethod.gestures.SwipeAction;
 import static org.futo.inputmethod.latin.common.Constants.ImeOption.FORCE_ASCII;
 import static org.futo.inputmethod.latin.common.Constants.ImeOption.NO_MICROPHONE;
 import static org.futo.inputmethod.latin.common.Constants.ImeOption.NO_MICROPHONE_COMPAT;
@@ -772,6 +774,24 @@ public class LatinIMELegacy implements KeyboardActionListener,
         final Event event = Event.createSoftwareTextEvent(rawText, Constants.CODE_OUTPUT_TEXT_WITH_SPACES);
         getActiveIME().onEvent(event);
         mKeyboardSwitcher.onEvent(event, getCurrentAutoCapsState());
+    }
+
+    @Override
+    public boolean isFleksyEnabled() {
+        return mImeManager.getFleksyEngine() != null;
+    }
+
+    @Override
+    public boolean onFleksyAction(SwipeAction direction) {
+        GeneralIME ime = mImeManager.getFleksyEngine();
+        if (ime == null) return false;
+        if (ime.onFleksyAction(direction)) return true;
+        if (direction == SwipeAction.RIGHT) {
+            onEvent(createSoftwareKeypressEvent(Constants.CODE_SPACE,
+                    Constants.NOT_A_COORDINATE, Constants.NOT_A_COORDINATE, false));
+            return true;
+        }
+        return false;
     }
 
     private IMEInterface getActiveIME() {
