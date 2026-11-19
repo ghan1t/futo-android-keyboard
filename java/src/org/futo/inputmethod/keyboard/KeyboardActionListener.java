@@ -16,10 +16,14 @@
 
 package org.futo.inputmethod.keyboard;
 
+import org.futo.inputmethod.gestures.SwipeAction;
 import org.futo.inputmethod.latin.common.Constants;
 import org.futo.inputmethod.latin.common.InputPointers;
 
 public interface KeyboardActionListener {
+    default boolean isFleksyEnabled() { return false; }
+    default boolean onFleksyAction(SwipeAction direction) { return false; }
+
     /**
      * Called when the user presses a key. This is sent before the {@link #onCodeInput} is called.
      * For keys that repeat, this is only called once.

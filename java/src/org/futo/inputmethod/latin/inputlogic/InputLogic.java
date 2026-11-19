@@ -25,6 +25,7 @@ import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.inputmethod.CorrectionInfo;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 
 import org.futo.inputmethod.accessibility.AccessibilityUtils;
 import org.futo.inputmethod.compat.SuggestionSpanUtils;
@@ -38,6 +39,7 @@ import org.futo.inputmethod.latin.BinaryDictionary;
 import org.futo.inputmethod.latin.DictionaryFacilitator;
 import org.futo.inputmethod.latin.LastComposedWord;
 import org.futo.inputmethod.latin.NgramContext;
+import org.futo.inputmethod.gestures.Edit;
 import org.futo.inputmethod.latin.RichInputConnection;
 import org.futo.inputmethod.latin.Suggest;
 import org.futo.inputmethod.latin.Suggest.OnGetSuggestedWordsCallback;
@@ -193,6 +195,50 @@ public final class InputLogic {
                     if (delta > 0) words.endPosition += delta;
                     else words.startPosition += delta;
                 }
+            }
+        }
+    }
+
+    public boolean replaceGestureRange(Edit edit) {
+        final int anchor = mConnection.mExpectedSelStart;
+        final int focus = mConnection.mExpectedSelEnd;
+        mConnection.beginBatchEdit();
+        try {
+            mConnection.finishComposingText();
+            resetComposingState(true);
+            // The buffering connection coalesces empty commits. Delete from the end
+            // of the verified span so selections and in-word suffixes work there too.
+            final int end = edit.getEnd();
+            final InputConnection editor = mImeHelper.getCurrentInputConnection();
+            if (editor == null || ((anchor != end || focus != end) && !mConnection.setSelection(end, end))
+                    || !edit.matchesAtCursor(editor)) {
+                mConnection.setSelection(anchor, focus);
+                return false;
+            }
+            final SettingsValues settings = Settings.getInstance().getCurrent();
+            final String replacement = edit.getReplacement();
+            final String removedWord = edit.getRemovedWord();
+            final String restoredWord = edit.getRestoredWord();
+            if (!removedWord.isEmpty()) {
+                unlearnWord(removedWord, settings,
+                        replacement.isEmpty() ? Constants.EVENT_BACKSPACE : Constants.EVENT_REVERT);
+            }
+            if (restoredWord != null) {
+                performAdditionToUserHistoryDictionary(settings, restoredWord,
+                        mConnection.getNgramContextFromNthPreviousWord(settings.mSpacingAndPunctuations, 1), -1);
+            }
+            if (!edit.getPrevious().isEmpty()) mConnection.deleteTextBeforeCursor(edit.getPrevious().length());
+            if (!replacement.isEmpty()) mConnection.commitText(replacement, 1);
+            mSpaceState = SpaceState.NONE;
+            mEnteredText = null;
+            mWordBeingCorrectedByCursor = null;
+            clearRememberedSuggestedWords();
+            return true;
+        } finally {
+            try {
+                mConnection.send();
+            } finally {
+                mConnection.endBatchEdit();
             }
         }
     }

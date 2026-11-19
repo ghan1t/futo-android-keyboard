@@ -10,11 +10,22 @@ can be installed alongside upstream.
 | Change | Source / attribution |
 | --- | --- |
 | Autocorrect toggle in the configurable action bar, with on/off icons and accessibility feedback | Adapted from [VibedByKaKi/futo-keyboard #4](https://github.com/VibedByKaKi/futo-keyboard/pull/4), commit [`0fdfcfd`](https://github.com/VibedByKaKi/futo-keyboard/commit/0fdfcfd79c8954890432ac437e2d6311e0e5695a), by KaKi87. |
+| Fleksy mode in the configurable action bar | Adapted from [ndom91’s Fleksy swipe mode PR #1898](https://github.com/futo-org/android-keyboard/pull/1898), with gesture detection and testing inspired by [djurcola’s swipe deletion PR #2199](https://github.com/futo-org/android-keyboard/pull/2199). |
 | Separate stable/development app names and IDs; update link points to this fork | Implemented in this fork. <br/>stable: `FUTO Keyboard [ghan1t]` / `org.ghan1t.inputmethod.latin`; <br/>development: `FUTO Keyboard [ghan1t Dev]` / `org.ghan1t.inputmethod.latin.unstable`. |
 | Git-derived `-ghan1t.N` versions and signed GitHub releases: automatic on `master`, manual on feature branches | Implemented in this fork; build setup informed by [VibedByKaKi's workflows](https://github.com/VibedByKaKi/futo-keyboard/tree/dev/.github/workflows). See the [release workflow](.github/workflows/fork-release.yml) and [versioning/signing guide](tools/release/README.md). |
 
 See [Releases](https://github.com/ghan1t/futo-android-keyboard/releases) for published fork builds.
 Fork releases use their own signing key and are not official FUTO releases.
+
+### Fleksy mode
+
+Add **Fleksy mode** to the action bar and tap it to switch from glide typing to gestures on the letter keys. The mode is off by default. Turning it off restores your usual glide-typing preference.
+
+- Swipe **left** to delete one word, regardless of how far you swipe or how long you hold.
+- Swipe **right** to restore one deleted word, most recent first. Once you start typing again or have restored all the words, a right swipe acts like pressing space.
+- Swipe **up** to undo the latest autocorrection at the cursor. Swipe **down** to reapply that exact correction.
+
+See the [Fleksy gestures guide](FLEKSY_GESTURES.md) for implementation details and test coverage.
 
 ## About upstream
 
